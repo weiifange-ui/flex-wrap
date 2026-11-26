@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>可拖曳縮放容器（flex-wrap 換行演示）</title>
+<style>
+  :root {
+    --bg: #faf8f4; --ink: #221f1a; --ink-soft: #6b6458;
+    --line: #e4ded2; --accent: #3d6b8a; --card-bg: #ffffff;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #17140f; --ink: #f0ebe0; --ink-soft: #a89c8c;
+      --line: #35302688; --card-bg: #211d17;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", -apple-system, sans-serif;
+    padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .page { max-width: 900px; margin: 0 auto; padding: 32px 20px 60px; }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  p.note { color: var(--ink-soft); font-size: 13px; line-height: 1.7; margin: 0 0 28px; }
+  code { background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; }
+
+  .resize-stage {
+    display: flex; /* 只是讓裡面的 .resizable 跟拖把並排，跟 flex-wrap 的演示無關 */
+    align-items: stretch;
+    border: 1px dashed var(--line);
+    border-radius: 12px;
+    padding: 4px;
+    overflow-x: auto;
+  }
+
+  /*
+    .resizable 的寬度直接由 JS 寫入 inline style.width 控制，
+    它自己不是 flex container 的「大小分配」對象，是被拖曳直接指定寬度的容器。
+    重點在它「裡面」的 .cards。
+  */
+  .resizable {
+    width: 640px;
+    min-width: 160px;
+    background: var(--card-bg);
+    border-radius: 10px;
+    padding: 16px;
+    transition: none; /* 拖曳當下不要有過渡延遲，才能即時看到換行 */
+  }
+
+  /*
+    .cards 才是真正的主角：display:flex + flex-wrap: wrap。
+    每張卡片有固定的 flex-basis（140px），容器夠寬就排一整排，
+    容器變窄、裝不下的時候，多出來的卡片自動換到下一行——
+    這就是 flex-wrap 存在的全部理由，平常要縮小瀏覽器視窗才看得到，
+    這裡直接做成可以即時拖曳觀察的版本。
+  */
+  .cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .card {
+    flex: 0 0 140px;
+    height: 80px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 13px;
+  }
+  .card:nth-child(6n+1) { background: #3d6b8a; }
+  .card:nth-child(6n+2) { background: #4a7a5c; }
+  .card:nth-child(6n+3) { background: #8a6a3d; }
+  .card:nth-child(6n+4) { background: #6a4a8a; }
+  .card:nth-child(6n+5) { background: #8a4a5c; }
+  .card:nth-child(6n+0) { background: #4a5a8a; }
+
+  /* 拖把：一條垂直的把手，拖它來改變 .resizable 的寬度 */
+  .handle {
+    flex: 0 0 18px;
+    margin-left: 6px;
+    border-radius: 6px;
+    background: var(--line);
+    cursor: ew-resize;
+    touch-action: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink-soft);
+    font-size: 12px;
+    user-select: none;
+  }
+  .handle:active { background: var(--accent); color: #fff; }
+
+  .width-readout {
+    margin-top: 14px; text-align: center; font-family: "SFMono-Regular", Consolas, monospace;
+    font-size: 13px; color: var(--ink-soft);
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>可拖曳縮放容器</h1>
+  <p class="note">
+    拖右邊那條把手，把容器拉窄拉寬。裡面的卡片用 <code>flex-wrap: wrap</code>，
+    容器裝不下一整排時，多出來的卡片會自動跳到下一行——
+    這就是 <code>flex-wrap</code> 真正要解決的問題，平常得縮小瀏覽器視窗才看得到，
+    這裡可以直接拖著看換行發生的瞬間。
+  </p>
+
+  <div class="resize-stage">
+    <div class="resizable" id="resizable">
+      <div class="cards" id="cards"></div>
+    </div>
+    <div class="handle" id="handle" title="拖曳改變寬度">⋮⋮</div>
+  </div>
+
+  <p class="width-readout" id="widthReadout">目前寬度：640px</p>
+</div>
+
+<script>
+(function(){
+  var resizable = document.getElementById('resizable');
+  var cardsWrap = document.getElementById('cards');
+  var handle = document.getElementById('handle');
+  var readout = document.getElementById('widthReadout');
+
+  var labels = ['卡片 1','卡片 2','卡片 3','卡片 4','卡片 5','卡片 6','卡片 7','卡片 8'];
+  labels.forEach(function(text){
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.textContent = text;
+    cardsWrap.appendChild(card);
+  });
+
+  var dragging = false;
+  var startX = 0;
+  var startWidth = 0;
+  var minWidth = 160;
+  var maxWidth = 760;
+
+  handle.addEventListener('pointerdown', function(e){
+    dragging = true;
+    startX = e.clientX;
+    startWidth = resizable.getBoundingClientRect().width;
+    handle.setPointerCapture(e.pointerId);
+  });
+
+  handle.addEventListener('pointermove', function(e){
+    if (!dragging) return;
+    var dx = e.clientX - startX;
+    var next = Math.min(maxWidth, Math.max(minWidth, startWidth + dx));
+    resizable.style.width = next + 'px';
+    readout.textContent = '目前寬度：' + Math.round(next) + 'px';
+  });
+
+  function endDrag(){ dragging = false; }
+  handle.addEventListener('pointerup', endDrag);
+  handle.addEventListener('pointercancel', endDrag);
+})();
+</script>
+</body>
+</html>
